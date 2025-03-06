@@ -241,28 +241,6 @@ class ContainerManager:
             self.logger.error(m)
             return m 
     
-    def pause_container(self, container_name):
-        """Metti in pausa il container target."""
-        try:
-            container = self.client.containers.get(container_name)
-            container.pause()
-            self.logger.info(f"Container {container_name} paused.")
-            return f"Container {container_name} paused."
-        except Exception as e:
-            self.logger.error(f"Error pausing container {container_name}: {e}")
-            return f"Error pausing container {container_name}: {e}"
-
-    def unpause_container(self, container_name):
-        """Ripristina il container target."""
-        try:
-            container = self.client.containers.get(container_name)
-            container.unpause()
-            self.logger.info(f"Container {container_name} unpaused.")
-            return f"Container {container_name} unpaused."
-        except Exception as e:
-            self.logger.error(f"Error unpausing container {container_name}: {e}")
-            return f"Error unpausing container {container_name}: {e}"
-
 
     def start_attack(self, attack_name, vehicle_name, vehicle_config):
         """Avvia un attacco all'interno del contenitore."""
@@ -296,10 +274,6 @@ class ContainerManager:
 
         self.logger.info(f"Target IP for attack: {target_ip}")
 
-        # Pausa il container target (producer o consumer)
-        target_container_name = f"{vehicle_name}_producer"  # Puoi modificare a seconda del tipo di container
-        self.pause_container(target_container_name)
-
         # Comando per eseguire l'attacco direttamente nel contenitore
         command_to_exec = f'python3 -c "import sys; sys.path.append(\'/attack\'); import attacker; a = attacker.Attacker(\'{target_ip}\'); a.start_attack()"'
 
@@ -311,12 +285,8 @@ class ContainerManager:
         except Exception as e:
             self.logger.error(f"Error during attack execution: {e}")
             self.attack_in_progress = False  # Sblocca il programma in caso di errore
-            self.unpause_container(target_container_name)  # Ripristina il container
             return f"Error during attack execution: {e}"
-
-        # Al termine dell'attacco, ripristina il container
-        self.unpause_container(target_container_name)
-
+        
         self.logger.info(f"Attack {attack_name} completed for vehicle {vehicle_name}.")
         self.attack_in_progress = False  # Sblocca il programma dopo l'attacco
         return f"Attack {attack_name} completed for vehicle {vehicle_name}!"
