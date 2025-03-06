@@ -1,3 +1,4 @@
+import time
 import docker
 import logging
 from OpenFAIR.producer_manager import ProducerManager
@@ -24,6 +25,7 @@ class ContainerManager:
         }
         self.producers = {}
         self.consumers = {}
+        self.attacker = {}
         self.containers_ips = {}
         self.cfg = cfg
         self.vehicle_names = []
@@ -31,6 +33,7 @@ class ContainerManager:
             vehicle_name = list(vehicle.keys())[0]
             self.vehicle_names.append(vehicle_name) 
 
+        self.attack_in_progress = False
         self.refresh_containers()
 
 
@@ -39,6 +42,7 @@ class ContainerManager:
         for vehicle_name in self.vehicle_names:
             self.create_producer(vehicle_name)
             self.create_consumer(vehicle_name)
+            #self.create_attacker(vehicle_name)
 
         self.refresh_containers()
         return "Vehicles created!"
@@ -65,9 +69,7 @@ class ContainerManager:
             "tail", "-f", "/dev/null"
         ]
         subprocess.run(cmd)
-        
-
-
+    
     def create_consumer(self, vehicle_name):
         container_name = f"{vehicle_name}_consumer"
         cmd = [
@@ -78,6 +80,25 @@ class ContainerManager:
             "tail", "-f", "/dev/null"
         ]
         subprocess.run(cmd)
+
+    def create_attacker(self):
+        container_name = "attacker"
+        
+        # Crea il contenitore dell'attaccante
+        cmd = [
+            "docker", "run", "-d",
+            "--name", container_name,
+            "--network", "of_trains_network",
+            "open_fair-attack",
+            "tail", "-f", "/dev/null"
+        ]
+        subprocess.run(cmd)
+        self.refresh_containers()
+
+        if 'attacker' in self.attacker:
+            self.logger.info("Attacker container created successfully.")
+        else:
+            self.logger.error("Failed to create attacker container.")
 
 
     def refresh_containers(self):     
@@ -95,13 +116,13 @@ class ContainerManager:
             elif 'wandber' in container.name:
                 self.wandber['container'] = container
                 self.federated_learner['container'] = container
-
+            elif 'attack' in container.name:
+                self.attacker[container.name]= container
             self.containers_ips[container.name] = container_ip 
         
 
         self.producer_manager = ProducerManager(self.cfg, self.producers)
         self.consumer_manager = ConsumerManager(self.cfg, self.consumers)
-            
     
     def produce_all(self):
         return self.producer_manager.start_all_producers()
@@ -218,4 +239,84 @@ class ContainerManager:
         except Exception as e:
             m = f"Error stopping federated learning: {e}"
             self.logger.error(m)
-            return m
+            return m 
+    
+    def pause_container(self, container_name):
+        """Metti in pausa il container target."""
+        try:
+            container = self.client.containers.get(container_name)
+            container.pause()
+            self.logger.info(f"Container {container_name} paused.")
+            return f"Container {container_name} paused."
+        except Exception as e:
+            self.logger.error(f"Error pausing container {container_name}: {e}")
+            return f"Error pausing container {container_name}: {e}"
+
+    def unpause_container(self, container_name):
+        """Ripristina il container target."""
+        try:
+            container = self.client.containers.get(container_name)
+            container.unpause()
+            self.logger.info(f"Container {container_name} unpaused.")
+            return f"Container {container_name} unpaused."
+        except Exception as e:
+            self.logger.error(f"Error unpausing container {container_name}: {e}")
+            return f"Error unpausing container {container_name}: {e}"
+
+
+    def start_attack(self, attack_name, vehicle_name, vehicle_config):
+        """Avvia un attacco all'interno del contenitore."""
+        if self.attack_in_progress:
+            self.logger.warning("An attack is already in progress. Waiting...")
+            while self.attack_in_progress:
+                time.sleep(1)
+
+        self.attack_in_progress = True  
+
+        # Verifica se il container dell'attaccante esiste
+        if 'attacker' not in self.attacker:
+            self.logger.info("Attacker container not found. Creating container.")
+            self.create_attacker()  
+            self.refresh_containers()  
+
+        # Assicurati che il contenitore dell'attaccante sia stato creato correttamente
+        attacker_container = self.attacker.get('attacker', None)
+
+        if attacker_container is None:
+            self.logger.error("No attacker container available after creation.")
+            self.attack_in_progress = False
+            return "No attacker container available."
+
+        # Ottieni l'IP del veicolo da attaccare
+        target_ip = self.containers_ips.get(f"{vehicle_name}_producer") or self.containers_ips.get(f"{vehicle_name}_consumer")
+        if not target_ip:
+            self.logger.error(f"Could not find IP for vehicle {vehicle_name}.")
+            self.attack_in_progress = False
+            return f"Could not find IP for vehicle {vehicle_name}."
+
+        self.logger.info(f"Target IP for attack: {target_ip}")
+
+        # Pausa il container target (producer o consumer)
+        target_container_name = f"{vehicle_name}_producer"  # Puoi modificare a seconda del tipo di container
+        self.pause_container(target_container_name)
+
+        # Comando per eseguire l'attacco direttamente nel contenitore
+        command_to_exec = f'python3 -c "import sys; sys.path.append(\'/attack\'); import attacker; a = attacker.Attacker(\'{target_ip}\'); a.start_attack()"'
+
+        
+        try:
+            return_tuple = attacker_container.exec_run(command_to_exec, tty=True, stream=True, stdin=True)
+            for line in return_tuple[1]:
+                self.logger.info(line.decode().strip())  # Log dell'output dell'attacco
+        except Exception as e:
+            self.logger.error(f"Error during attack execution: {e}")
+            self.attack_in_progress = False  # Sblocca il programma in caso di errore
+            self.unpause_container(target_container_name)  # Ripristina il container
+            return f"Error during attack execution: {e}"
+
+        # Al termine dell'attacco, ripristina il container
+        self.unpause_container(target_container_name)
+
+        self.logger.info(f"Attack {attack_name} completed for vehicle {vehicle_name}.")
+        self.attack_in_progress = False  # Sblocca il programma dopo l'attacco
+        return f"Attack {attack_name} completed for vehicle {vehicle_name}!"

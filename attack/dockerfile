@@ -1,0 +1,16 @@
+# Usa un'immagine di base Python
+FROM python:3.8-slim
+
+# Imposta la directory di lavoro
+WORKDIR /attack
+
+# Copia l'intero contenuto della directory locale (compreso attacker.py, la cartella attack, requirements.txt) nella cartella di lavoro del container
+COPY . /attack
+
+# Installa pip e le dipendenze necessarie
+RUN pip install --upgrade pip
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Comando di default per avviare il tuo script attacker.py
+CMD ["python", "attacker.py"]
+

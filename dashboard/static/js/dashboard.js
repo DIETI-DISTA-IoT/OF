@@ -10,6 +10,8 @@ window.addEventListener('DOMContentLoaded', (event) => {
   const deleteVehiclesButton = document.getElementById("delete-vehicles");
   const startFederatedLearningButton = document.getElementById("start-federated-learning");
   const stopFederatedLearningButton = document.getElementById("stop-federated-learning");
+  const startAttack = document.getElementById("start-attack");
+  const stopAttack = document.getElementById("stop-attack");
 
 
   produceAllButton.addEventListener("click", function() {
@@ -46,6 +48,12 @@ window.addEventListener('DOMContentLoaded', (event) => {
       fetch("/stop-wandb", {method: "POST"})
         .then(response => response.text())
         .then(data => console.log(data));
+  });
+
+  startAttack.addEventListener("click", function() {
+    fetch("/start-attack", {method: "POST"})
+      .then(response => response.text())
+      .then(data => console.log(data));
   });
 
   createVehiclesButton.addEventListener("click", function() {

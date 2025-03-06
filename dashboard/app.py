@@ -1,6 +1,6 @@
 from omegaconf import DictConfig, OmegaConf 
 import hydra
-from flask import Flask,  render_template
+from flask import Flask,  render_template, request
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -125,6 +125,21 @@ def create_app(cfg: DictConfig) -> None:
     @app.route('/stop-wandb', methods=['POST'])
     def stop_wandb():
         return container_manager.stop_wandb()
+    
+
+    @app.route('/start-attack', methods=['POST'])
+    def start_attack():
+        """
+        Initiates an attack by calling the start_attack method of the container_manager.
+
+        Returns:
+            The result of the container_manager's start_attack method.
+        """
+        attack_name = "Flood"
+        vehicle_name = "claude"
+        vehicle_config = "60"
+        
+        return container_manager.start_attack(attack_name, vehicle_name, vehicle_config)
 
     @app.route('/real-all-data')
     def get_all_real_data():
