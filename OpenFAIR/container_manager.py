@@ -42,7 +42,6 @@ class ContainerManager:
         for vehicle_name in self.vehicle_names:
             self.create_producer(vehicle_name)
             self.create_consumer(vehicle_name)
-            #self.create_attacker(vehicle_name)
 
         self.refresh_containers()
         return "Vehicles created!"
@@ -265,52 +264,27 @@ class ContainerManager:
             self.attack_in_progress = False
             return "No attacker container available."
 
-        # Ottieni l'IP del veicolo da attaccare (Flood Attack)
+        # Ottieni l'IP del veicolo da attaccare
         target_ip = self.containers_ips.get(f"{vehicle_name}_producer") or self.containers_ips.get(f"{vehicle_name}_consumer")
         if not target_ip:
             self.logger.error(f"Could not find IP for vehicle {vehicle_name}.")
             self.attack_in_progress = False
             return f"Could not find IP for vehicle {vehicle_name}."
 
-        self.logger.info(f"Target IP for flood attack: {target_ip}")
+        self.logger.info(f"Target IP for attack: {target_ip}")
 
-        # Comando per eseguire l'attacco flood direttamente nel contenitore
-        flood_command = f'python3 -c "import sys; sys.path.append(\'/attack\'); import attacker; a = attacker.Attacker(\'{target_ip}\'); a.start_attack()"'
+        # Comando per eseguire l'attacco direttamente nel contenitore
+        command_to_exec = f'python3 -c "import sys; sys.path.append(\'/attack\'); import attacker; a = attacker.Attacker(\'{target_ip}\'); a.start_attack()"'
         
-        # Comando per eseguire l'attacco DoS direttamente nel contenitore (su bob_producer)
-        dos_target_ip = self.containers_ips.get(f"{vehicle_name}_producer")  # Usare lo stesso veicolo come target
-        if not dos_target_ip:
-            self.logger.error(f"Could not find IP for {vehicle_name}_producer.")
-            self.attack_in_progress = False
-            return f"Could not find IP for {vehicle_name}_producer."
-
-        self.logger.info(f"Target IP for DoS attack: {dos_target_ip}")
-            
-        dos_command = f'python3 -c "import sys; sys.path.append(\'/dos_attack\'); import dos_attack; a = dos_attack.dos_attack(\'{dos_target_ip}\'); a.launch_cpu_attack()"'
-
-
-        def run_attack_in_container(container, command):
-            try:
-                # Avvia il comando nel container
-                result = container.exec_run(command, tty=True, stream=True, stdin=True)
-                for line in result[1]:
-                    self.logger.info(line.decode().strip())  # Log dell'output dell'attacco
-            except Exception as e:
-                self.logger.error(f"Error during attack: {e}")
-    
-        # Ottieni il contenitore bob_producer
-        bob_container = self.client.containers.get('bob_producer')
-
-        # Esegui l'attacco flood e l'attacco DoS nei rispettivi thread
-        flood_thread = threading.Thread(target=run_attack_in_container, args=(attacker_container, flood_command))
-        dos_thread = threading.Thread(target=run_attack_in_container, args=(bob_container, dos_command))
-
-        flood_thread.start()
-        dos_thread.start()
-
-        flood_thread.join()
-        dos_thread.join()
-
-        self.logger.info(f"Attack {attack_name} completed for vehicle {vehicle_name} and DoS attack on bob_producer.")
+        try:
+            return_tuple = attacker_container.exec_run(command_to_exec, tty=True, stream=True, stdin=True)
+            for line in return_tuple[1]:
+                self.logger.info(line.decode().strip())  # Log dell'output dell'attacco
+        except Exception as e:
+            self.logger.error(f"Error during attack execution: {e}")
+            self.attack_in_progress = False  # Sblocca il programma in caso di errore
+            return f"Error during attack execution: {e}"
+        
+        self.logger.info(f"Attack {attack_name} completed for vehicle {vehicle_name}.")
         self.attack_in_progress = False  # Sblocca il programma dopo l'attacco
-        return f"Attack {attack_name} completed for vehicle {vehicle_name} and DoS attack on bob_producer!"
+        return f"Attack {attack_name} completed for vehicle {vehicle_name}!"
