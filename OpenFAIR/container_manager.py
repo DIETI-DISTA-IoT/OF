@@ -28,6 +28,9 @@ class ContainerManager:
         self.attacker = {}
         self.containers_ips = {}
         self.cfg = cfg
+        self.cpu_cores=[]
+        self.cpu_period=[]
+        self.cpu_quota=[]
         self.vehicle_names = []
         for vehicle in cfg.vehicles:
             vehicle_name = list(vehicle.keys())[0]
@@ -38,10 +41,18 @@ class ContainerManager:
 
 
     def create_vehicles(self):
+        default_cpu_cores = self.cfg.default_vehicle_config.get("cpu_cores", 6)
+        default_cpu_period = self.cfg.default_vehicle_config.get("cpu_period", 100000)
+        default_cpu_quota = self.cfg.default_vehicle_config.get("cpu_quota", 100000)
 
         for vehicle_name in self.vehicle_names:
-            self.create_producer(vehicle_name)
-            self.create_consumer(vehicle_name)
+            vehicle_config = next((vehicle.get(vehicle_name, {}) for vehicle in self.cfg.vehicles if vehicle_name in vehicle), {})
+            cpu_cores= vehicle_config.get('cpu_cores', default_cpu_cores)
+            cpu_period= vehicle_config.get('cpu_period', default_cpu_period)
+            cpu_quota= vehicle_config.get('cpu_quota', default_cpu_quota)
+
+            self.create_producer(vehicle_name,cpu_cores,cpu_period,cpu_quota)
+            self.create_consumer(vehicle_name,cpu_cores,cpu_period,cpu_quota)
 
         self.refresh_containers()
         return "Vehicles created!"
@@ -58,32 +69,38 @@ class ContainerManager:
         return "Vehicles deleted!"
 
 
-    def create_producer(self, vehicle_name):
+    def create_producer(self, vehicle_name,cpu_cores, cpu_period, cpu_quota):
         container_name = f"{vehicle_name}_producer"
         cmd = [
             "docker", "run", "-d",
             "--name", container_name,
             "--network", "of_trains_network",
+            "--cpuset-cpus", str(cpu_cores),
+            "--cpu-period", str(cpu_period),
+            "--cpu-quota", str(cpu_quota),
             "open_fair-producer",
             "tail", "-f", "/dev/null"
         ]
         subprocess.run(cmd)
-    
-    def create_consumer(self, vehicle_name):
+
+    def create_consumer(self, vehicle_name,cpu_cores,cpu_period, cpu_quota):
         container_name = f"{vehicle_name}_consumer"
         cmd = [
             "docker", "run", "-d",
             "--name", container_name,
             "--network", "of_trains_network",
+            "--cpuset-cpus", str(cpu_cores), 
+            "--cpu-period", str(cpu_period),
+            "--cpu-quota", str(cpu_quota),
             "open_fair-consumer",
             "tail", "-f", "/dev/null"
         ]
         subprocess.run(cmd)
 
+
     def create_attacker(self):
         container_name = "attacker"
-        
-        # Crea il contenitore dell'attaccante
+    
         cmd = [
             "docker", "run", "-d",
             "--name", container_name,

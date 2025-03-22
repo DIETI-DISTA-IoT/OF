@@ -23,6 +23,10 @@ default_vehicle_config:
   kafka_broker: kafka:9092
   mu_anomalies: 157
   mu_normal: 117
+  #cpu_limit: 1.0
+  cpu_cores: "0,1,2,3,4,5"
+  cpu_period: 100000
+  cpu_quota: 100000  #calcolo cpu_quota = cpu_period * cpu_limit
   alpha: 0.2
   beta: 1.9
   anomaly_classes: all
@@ -99,6 +103,11 @@ vehicles:
         - 4
         - 6
         - 14
+      #cpu_limit: 0.3
+      cpu_cores: "0,1" 
+      cpu_period: 100000      
+      cpu_quota: 30000  #calcolo cpu_quota = cpu_period * cpu_limit
+
   - bob:
       anomaly_classes:
         - 0 
@@ -123,6 +132,12 @@ vehicles:
         - 4
         - 6
         - 14
+      #cpu_limit: 0.6
+      cpu_cores: "2,3" 
+      cpu_period: 100000      
+      cpu_quota: 60000 #calcolo cpu_quota = cpu_period * cpu_limit
+
+
   - claude:
       anomaly_classes:
         - 0
@@ -149,6 +164,11 @@ vehicles:
         - 4
         - 6
         - 14
+      #cpu_limit: 0.8  
+      cpu_cores: "4,5"
+      cpu_period: 100000      
+      cpu_quota: 80000 #calcolo cpu_quota = cpu_period * cpu_limit
+
 
 default_consumer_config:
   buffer_size: 5000

@@ -111,7 +111,6 @@ def create_app(cfg: DictConfig) -> None:
     def start_wandb():
         return container_manager.start_wandb(cfg)
 
-
     @app.route('/create-vehicles', methods=['POST'])
     def create_vehicles():
         return container_manager.create_vehicles()
